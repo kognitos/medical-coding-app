@@ -939,6 +939,33 @@ At render time, filter `STATUS_ACTIONS[entity.status]` by the user's role using 
 - Detail page: Rule content with keyword highlighting, version history sidebar, metrics sidebar
 - **Run History** section below the rule content showing all Kognitos runs that used that rule, as an expandable table with inline input/output details
 
+**Rule criteria must be written in plain English, not pseudocode.** Kognitos is an "English as Code" platform — the rules displayed in the app should read like step-by-step instructions a human expert would follow, not like programming conditionals. This applies to both the seed data (`rules` table `criteria` field) and any future rule authoring UI.
+
+Format rules as structured steps:
+
+```
+Step 1: [Short action title]
+One or two sentences describing what to check.
+  - Bullet list of specific items, codes, or conditions
+  - Another item
+
+Step 2: [Next action]
+Description of what to evaluate or compare.
+
+Step 3: Resolve
+If [condition]: [action].
+If [other condition]: [other action].
+
+Exception: [Edge case that overrides the normal flow].
+```
+
+Avoid:
+- Pseudocode syntax (`IF x THEN y`, `AND`, `OR`, function calls like `flag_for_review()`)
+- Long run-on sentences — break into short, scannable lines
+- Monospace/code font for criteria display — use the default sans-serif font
+
+Render criteria with `whitespace-pre-wrap font-sans` so that line breaks and indentation in the stored text are preserved without making it look like code.
+
 ### 10.7 Notifications
 
 - Bell icon in topbar with dynamic unread count (`queryUnreadNotificationCount(user.id)`)
@@ -1299,6 +1326,18 @@ When `domain.config.ts` defines a constant array with `as const` (e.g., `termina
 const isTerminal = (DOMAIN.terminalStatuses as readonly string[]).includes(entity.status);
 ```
 
+### Rule / SOP Criteria Language
+
+Rule criteria stored in the database and displayed in the Rules browser must be written in **plain English**, not pseudocode or programming syntax. Kognitos is an "English as Code" platform — the rules should read like step-by-step instructions a domain expert would follow.
+
+| Do | Don't |
+|----|-------|
+| `Step 1: Check whether modifier 25 is present` | `IF modifier_25 present THEN ...` |
+| `Flag any code ending in .9 or .0` | `IF ICD-10 ends_with '.9' OR '.0'` |
+| `If documentation supports a more specific code: replace it` | `THEN flag_for_review('Check specificity')` |
+
+Use numbered steps, short sentences, bullet lists, common examples, and exception notes. Render with `whitespace-pre-wrap font-sans` (not `font-mono`).
+
 ### New Entity Creation
 
 When a page creates a new entity client-side (e.g., a "New Case" dialog), ensure the default field values match the seed data conventions:
@@ -1472,6 +1511,8 @@ git push -u origin main
 - [ ] Comments and timeline events display the correct author name (not "Unknown")
 - [ ] New entity creation uses `user.org_id` from auth context, not a hard-coded fallback
 - [ ] `MOCK_USERS` IDs, org_ids, and roles match seed data in `lib/mock-data/`
+- [ ] Rule criteria are written in plain English (numbered steps, short sentences, bullet lists) — no pseudocode (`IF/THEN/AND/OR`) or function-call syntax
+- [ ] Rule criteria rendered with `font-sans`, not `font-mono`
 
 ### Polish
 - [ ] Interactive drill-down on all dashboard visualizations
