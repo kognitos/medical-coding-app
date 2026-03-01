@@ -22,6 +22,84 @@ import { Separator } from "@/components/ui/separator";
 import { getRuleById } from "@/lib/api";
 import type { Rule } from "@/lib/types";
 
+const HIGHLIGHT_KEYWORDS = [
+  "Check",
+  "Verify",
+  "Confirm",
+  "Review",
+  "Flag",
+  "Must",
+  "Required",
+];
+
+function renderCriteria(content: string) {
+  const lines = content.split("\n");
+  return lines.map((line, i) => {
+    if (line.startsWith("##")) {
+      const level = line.match(/^#+/)?.[0].length ?? 2;
+      const text = line.replace(/^#+\s*/, "");
+      if (level === 2)
+        return (
+          <h2 key={i} className="mt-6 mb-3 text-xl font-bold text-foreground first:mt-0">
+            {text}
+          </h2>
+        );
+      return (
+        <h3 key={i} className="mt-5 mb-2 text-lg font-semibold text-foreground">
+          {text}
+        </h3>
+      );
+    }
+
+    let processed: React.ReactNode = line;
+    for (const kw of HIGHLIGHT_KEYWORDS) {
+      if (line.includes(kw)) {
+        const parts = line.split(new RegExp(`(${kw})`, "g"));
+        processed = parts.map((part, j) =>
+          part === kw ? (
+            <span key={j} className="font-bold text-blue-600">{part}</span>
+          ) : (
+            <span key={j}>{part}</span>
+          )
+        );
+        break;
+      }
+    }
+
+    if (line.startsWith("  - ")) {
+      return (
+        <div key={i} className="flex gap-2 py-0.5 pl-8">
+          <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60" />
+          <span className="text-sm leading-relaxed">{typeof processed === "string" ? processed.slice(4) : processed}</span>
+        </div>
+      );
+    }
+
+    if (line.startsWith("- ")) {
+      return (
+        <div key={i} className="flex gap-2 py-0.5 pl-4">
+          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground" />
+          <span className="text-sm leading-relaxed">{typeof processed === "string" ? processed.slice(2) : processed}</span>
+        </div>
+      );
+    }
+
+    if (line.match(/^\d+\.\s/)) {
+      return (
+        <p key={i} className="py-0.5 pl-4 text-sm leading-relaxed">{processed}</p>
+      );
+    }
+
+    if (line.trim() === "") {
+      return <div key={i} className="h-2" />;
+    }
+
+    return (
+      <p key={i} className="text-sm leading-relaxed">{processed}</p>
+    );
+  });
+}
+
 export default function RuleDetailPage({
   params,
 }: {
@@ -94,9 +172,7 @@ export default function RuleDetailPage({
               <CardTitle className="text-base">Criteria</CardTitle>
             </CardHeader>
             <CardContent>
-              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                {rule.criteria}
-              </pre>
+              {renderCriteria(rule.criteria)}
             </CardContent>
           </Card>
         </div>

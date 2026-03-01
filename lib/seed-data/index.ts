@@ -29,21 +29,26 @@ export const rules = [
     description: "Correct Coding Initiative edit: Evaluation and Management codes should not be billed with certain procedures on the same date of service unless modifier 25 is appended.",
     category: "Bundling",
     is_active: true,
-    criteria: `Step 1: Identify Bundling Conflict
+    criteria: `## CCI Bundling Edit: E/M with Procedure
+
+### Step 1: Identify Bundling Conflict
 Check whether the chart contains both:
-  - An E/M code (99201–99215, 99221–99223, 99231–99233)
-  - A procedure code (10000–69999)
-  on the same date of service.
+- An E/M code (99201–99215, 99221–99223, 99231–99233)
+- A procedure code (10000–69999)
+on the same date of service.
 
-Step 2: Check for Modifier 25
+### Step 2: Check for Modifier 25
 If both are present, check whether modifier 25 is appended to the E/M code.
-Modifier 25 indicates a significant, separately identifiable E/M service.
+- Modifier 25 indicates a significant, separately identifiable E/M service
+- The E/M must be above and beyond the pre/post-operative care of the procedure
 
-Step 3: Resolve
+### Step 3: Resolve
 If modifier 25 is present and documentation supports a separate E/M service: allow both codes.
 If modifier 25 is missing: deny the E/M code and flag for coder review.
 
-Exception: Critical care codes (99291–99292) have separate bundling rules.`,
+### Exception
+- Critical care codes (99291–99292) have separate bundling rules
+- Global surgical package rules may apply for post-operative E/M visits`,
     created_at: "2026-01-05T08:00:00Z",
     updated_at: "2026-01-05T08:00:00Z",
   },
@@ -53,24 +58,27 @@ Exception: Critical care codes (99291–99292) have separate bundling rules.`,
     description: "ICD-10 codes must be coded to the highest level of specificity available. Unspecified codes should only be used when clinical documentation does not support a more specific code.",
     category: "Specificity",
     is_active: true,
-    criteria: `Step 1: Scan for Unspecified Codes
+    criteria: `## ICD-10 Code Specificity Validation
+
+### Step 1: Scan for Unspecified Codes
 Review each ICD-10 code on the chart.
 Flag any code ending in .9 or .0 — these indicate an unspecified diagnosis.
 
-Step 2: Check Documentation
+### Step 2: Check Documentation
 For each flagged code, review the clinical documentation:
-  - Is there enough detail to assign a more specific code?
-  - Does the note specify laterality, type, stage, or trimester?
-  - Are comorbidities documented that would support a more precise code?
+- Is there enough detail to assign a more specific code?
+- Does the note specify laterality, type, stage, or trimester?
+- Are comorbidities documented that would support a more precise code?
 
-Step 3: Resolve
+### Step 3: Resolve
 If documentation supports a more specific code: replace the unspecified code.
 If documentation does not support further specificity: accept the code and note the reason.
 
-Common examples:
-  - E11.9 (Type 2 diabetes, unspecified) → check for E11.65, E11.21, etc.
-  - J18.9 (Pneumonia, unspecified) → check for organism-specific codes
-  - M54.5 (Low back pain) → check for radiculopathy, laterality`,
+### Common Examples
+- E11.9 (Type 2 diabetes, unspecified) → check for E11.65, E11.21, etc.
+- J18.9 (Pneumonia, unspecified) → check for organism-specific codes
+- M54.5 (Low back pain) → check for radiculopathy, laterality
+- I10 (Essential hypertension) → acceptable, already at highest specificity`,
     created_at: "2026-01-05T08:30:00Z",
     updated_at: "2026-02-10T14:00:00Z",
   },
@@ -80,22 +88,28 @@ Common examples:
     description: "The principal diagnosis must be the condition established after study to be chiefly responsible for the admission. Verify DRG assignment aligns with principal diagnosis.",
     category: "DRG",
     is_active: true,
-    criteria: `Step 1: Identify the Principal Diagnosis
-The principal diagnosis is the condition established after study to be chiefly responsible for the admission.
-It must be supported by the attending physician's documentation.
+    criteria: `## DRG Validation: Principal Diagnosis Alignment
 
-Step 2: Validate DRG Assignment
+### Step 1: Identify the Principal Diagnosis
+The principal diagnosis is the condition established after study to be chiefly responsible for the admission.
+- Must be supported by the attending physician's documentation
+- Must follow UHDDS (Uniform Hospital Discharge Data Set) guidelines
+
+### Step 2: Validate DRG Assignment
 Look up the expected principal diagnoses for the assigned DRG.
 Confirm the chart's principal diagnosis is among them.
 
-Step 3: Check for Common Errors
-  - Symptom coded as principal when a definitive diagnosis was established
-  - Secondary diagnosis sequenced as principal (changes DRG and reimbursement)
-  - "Rule of 3" — when multiple conditions are treated, the one consuming the most resources should be principal
+### Step 3: Check for Common Errors
+- Symptom coded as principal when a definitive diagnosis was established
+- Secondary diagnosis sequenced as principal (changes DRG and reimbursement)
+- Complications or comorbidities (CC/MCC) missed that would change DRG tier
 
-Step 4: Resolve
+### Step 4: Resolve
 If DRG matches principal diagnosis: accept.
-If mismatch found: flag for coder review with the expected DRG and reimbursement difference.`,
+If mismatch found: flag for coder review with the expected DRG and reimbursement difference.
+
+### Note
+When multiple conditions are treated, the one consuming the most resources should be principal.`,
     created_at: "2026-01-05T09:00:00Z",
     updated_at: "2026-01-05T09:00:00Z",
   },
@@ -105,26 +119,29 @@ If mismatch found: flag for coder review with the expected DRG and reimbursement
     description: "Modifier 59 should only be used when procedures are performed at different anatomical sites, during different encounters, or are truly distinct services.",
     category: "Bundling",
     is_active: true,
-    criteria: `Step 1: Identify Modifier 59 Usage
+    criteria: `## Modifier 59: Distinct Procedural Service Validation
+
+### Step 1: Identify Modifier 59 Usage
 Flag any procedure code that has modifier 59 (Distinct Procedural Service) appended.
 
-Step 2: Verify Distinct Service Criteria
+### Step 2: Verify Distinct Service Criteria
 The modifier is valid only when at least ONE of the following is true:
-  - Procedures were performed at different anatomical sites
-  - Procedures were performed during different encounters on the same day
-  - Procedures are truly separate and distinct services (not components of the same procedure)
+- Procedures were performed at different anatomical sites
+- Procedures were performed during different encounters on the same day
+- Procedures are truly separate and distinct services
 
-Step 3: Check Documentation
-The operative note must clearly support the distinct nature of each procedure.
-  - Different incision sites documented
-  - Separate dictated reports for each procedure
-  - Different diagnoses driving each procedure
+### Step 3: Check Documentation
+The operative note must clearly support the distinct nature of each procedure:
+- Different incision sites documented
+- Separate dictated reports for each procedure
+- Different diagnoses driving each procedure
 
-Step 4: Resolve
+### Step 4: Resolve
 If criteria met and documentation supports: accept modifier 59.
 If criteria not met: deny the modifier and flag for coder review.
 
-Note: Consider whether XE, XS, XP, or XU modifiers (HCPCS subset) are more appropriate than 59.`,
+### Note
+Consider whether XE, XS, XP, or XU modifiers (HCPCS subset) are more appropriate than modifier 59.`,
     created_at: "2026-01-06T08:00:00Z",
     updated_at: "2026-01-06T08:00:00Z",
   },
@@ -134,28 +151,30 @@ Note: Consider whether XE, XS, XP, or XU modifiers (HCPCS subset) are more appro
     description: "When documentation does not specify laterality (left, right, bilateral) for procedures or diagnoses that require it, a physician query must be generated.",
     category: "Documentation",
     is_active: true,
-    criteria: `Step 1: Check Laterality Requirement
-Determine whether the procedure or diagnosis requires laterality.
-Common examples:
-  - Joint procedures (knee, hip, shoulder, wrist)
-  - Fracture codes
-  - Eye procedures
-  - Breast procedures
-  - Extremity conditions (carpal tunnel, rotator cuff)
+    criteria: `## Physician Query: Missing Laterality
 
-Step 2: Review Documentation
+### Step 1: Check Laterality Requirement
+Determine whether the procedure or diagnosis requires laterality:
+- Joint procedures (knee, hip, shoulder, wrist)
+- Fracture codes
+- Eye procedures
+- Breast procedures
+- Extremity conditions (carpal tunnel, rotator cuff)
+
+### Step 2: Review Documentation
 Search the clinical notes, operative report, and radiology results for:
-  - Explicit mention of "left," "right," or "bilateral"
-  - Diagram or body site markings
-  - Imaging laterality (e.g., "MRI right knee")
+- Explicit mention of "left," "right," or "bilateral"
+- Diagram or body site markings
+- Imaging laterality (e.g., "MRI right knee")
 
-Step 3: Generate Query
+### Step 3: Generate Query
 If laterality is required but not documented:
-  - Generate a physician query to the attending provider
-  - Include the specific code and what laterality is needed
-  - Reference the relevant documentation gap
+1. Generate a physician query to the attending provider
+2. Include the specific code and what laterality is needed
+3. Reference the relevant documentation gap
 
-Exception: Midline structures (spine, sternum) do not require laterality.`,
+### Exception
+Midline structures (spine, sternum, trachea) do not require laterality.`,
     created_at: "2026-01-06T09:00:00Z",
     updated_at: "2026-01-06T09:00:00Z",
   },
@@ -165,27 +184,29 @@ Exception: Midline structures (spine, sternum) do not require laterality.`,
     description: "Flag cases where the E/M level assigned exceeds what the documentation supports based on medical decision-making complexity, time, or key components.",
     category: "Compliance",
     is_active: true,
-    criteria: `Step 1: Determine E/M Level from Documentation
+    criteria: `## Upcoding Detection: E/M Level Validation
+
+### Step 1: Determine E/M Level from Documentation
 Review the clinical note to assess the level of service using CMS guidelines:
-  - Medical Decision Making (MDM) complexity: straightforward, low, moderate, high
-  - Total time on the date of the encounter (for time-based billing)
+- Medical Decision Making (MDM) complexity: straightforward, low, moderate, high
+- Total time on the date of the encounter (for time-based billing)
 
-Step 2: Compare to Assigned Code
+### Step 2: Compare to Assigned Code
 Map the documented MDM or time to the expected E/M level:
-  - 99211: Minimal problem (nurse visit)
-  - 99212: Straightforward MDM or 10–19 minutes
-  - 99213: Low MDM or 20–29 minutes
-  - 99214: Moderate MDM or 30–39 minutes
-  - 99215: High MDM or 40–54 minutes
+- 99211: Minimal problem (nurse visit)
+- 99212: Straightforward MDM or 10–19 minutes
+- 99213: Low MDM or 20–29 minutes
+- 99214: Moderate MDM or 30–39 minutes
+- 99215: High MDM or 40–54 minutes
 
-Step 3: Evaluate
-If the assigned E/M level matches or is below the documented level: accept.
-If the assigned level is higher than what documentation supports: flag for potential upcoding.
+### Step 3: Evaluate
+If the assigned level matches or is below the documented level: accept.
+If the assigned level is higher than documentation supports: flag for potential upcoding.
 
-Review factors:
-  - Number and complexity of problems addressed
-  - Amount and complexity of data reviewed
-  - Risk of complications, morbidity, or mortality`,
+### Review Factors
+- Number and complexity of problems addressed
+- Amount and complexity of data reviewed
+- Risk of complications, morbidity, or mortality`,
     created_at: "2026-01-07T08:00:00Z",
     updated_at: "2026-01-07T08:00:00Z",
   },
