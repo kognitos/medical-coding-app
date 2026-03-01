@@ -427,12 +427,32 @@ ALTER TABLE entities ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read" ON entities FOR SELECT USING (true);
 ```
 
+**Critical — RLS write policies:** The schema above enables RLS and creates `SELECT` policies, but the app also needs `INSERT` and `UPDATE` policies for every table it writes to. Without these, the anon key (used by the browser) is silently blocked from all writes — no error is thrown, the operation just returns empty results.
+
+Create a **separate migration file** (e.g., `00000000000001_write_policies.sql`) with write policies:
+
+```sql
+-- Allow anon writes for demo app (mock auth, no Supabase Auth)
+CREATE POLICY "Allow public insert" ON entities FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update" ON entities FOR UPDATE USING (true);
+
+CREATE POLICY "Allow public insert" ON audit_events FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update" ON audit_events FOR UPDATE USING (true);
+
+-- Repeat for every table the UI writes to (entities, audit_events, comments, notifications, etc.)
+```
+
+**Why this is easy to miss:** The seed script uses `SUPABASE_SERVICE_ROLE_KEY`, which bypasses RLS entirely. So seeding succeeds, reads work (SELECT policy exists), and the app looks correct — until you click an action button and the write silently fails. Always test writes with the anon key, not the service role key.
+
+**Migration file ordering:** Supabase applies migration files in filename sort order. Use zero-padded timestamp prefixes (e.g., `00000000000000_schema.sql`, `00000000000001_write_policies.sql`) to ensure the schema is created before policies reference its tables.
+
 **Schema guidelines:**
 - Use `text` primary keys matching the TypeScript `id` field
 - Use `jsonb` for flexible nested objects (e.g., `eligibility_status`, `criteria_summary`)
 - Add foreign key constraints for all relationships
 - Create indexes on frequently filtered columns (`status`, `payer_id`, `assigned_to`)
 - Enable Row Level Security on all tables
+- **Create INSERT and UPDATE policies for every table the app writes to** — not just SELECT
 
 ### 7.3 Create Seed Data (`lib/mock-data/` + `scripts/seed.ts`)
 
@@ -1402,10 +1422,34 @@ useEffect(() => { ... }, [data]);  // ← React error: hook count changes betwee
 - [ ] Role-aware dashboard (section ordering/visibility)
 
 ### Deployment
-- [ ] Set Vercel env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- [ ] Pull env vars locally: `vercel env pull .env.local`
-- [ ] Deploy to Vercel: `vercel --prod`
+
+**Git setup (template origin trap):** When building from the template, the git `origin` remote still points to `kognitos/kognitos-trusted-app-template`. You must create your own repo and change the remote before pushing:
+
+```bash
+# Create new repo (e.g., under your org)
+gh repo create YOUR_ORG/your-app-name --public --description "..."
+
+# Point origin to the new repo (NOT the template)
+git remote set-url origin https://github.com/YOUR_ORG/your-app-name.git
+git push -u origin main
+```
+
+**Vercel + Supabase deployment:**
+
+- [ ] Create a GitHub repo for the app (separate from the template repo)
+- [ ] Change git `origin` remote to the new repo and push
+- [ ] Link the Vercel project to the correct team/scope: `vercel link --scope YOUR_TEAM`
+- [ ] Set Supabase env vars on Vercel **before the first production deploy** (without them the build succeeds but the app shows blank pages at runtime):
+  ```bash
+  echo "https://YOUR_PROJECT.supabase.co" | vercel env add NEXT_PUBLIC_SUPABASE_URL production
+  echo "your-anon-key" | vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
+  ```
+- [ ] Pull env vars locally for development: `vercel env pull .env.local`
+- [ ] Push the Supabase schema: `supabase db push` (both schema and write policy migrations)
+- [ ] Seed the database: `SUPABASE_SERVICE_ROLE_KEY=... npx tsx scripts/seed.ts`
+- [ ] Deploy to Vercel: `vercel --prod --scope YOUR_TEAM`
 - [ ] Verify all pages load data from Supabase (no console errors)
+- [ ] Verify writes work: perform an action, refresh the page, confirm the change persisted
 
 ### Write Persistence (Critical)
 - [ ] Every action button in the entity detail page calls either `createRun()` or `updateEntity()` + `insertAuditEvent()` — no state-only updates
