@@ -135,3 +135,45 @@ export async function getNotificationsForUser(userId: string): Promise<Notificat
   if (error) throw error;
   return data as Notification[];
 }
+
+// ── Write operations ──────────────────────────────────────────
+
+export async function updateChart(
+  id: string,
+  updates: Partial<Omit<Chart, "id">>,
+): Promise<Chart> {
+  const { data, error } = await sb()
+    .from("charts")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as Chart;
+}
+
+export async function insertChart(chart: Chart): Promise<Chart> {
+  const { data, error } = await sb()
+    .from("charts")
+    .insert(chart)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as Chart;
+}
+
+export async function insertAuditEvent(event: {
+  id: string;
+  chart_id: string;
+  action: string;
+  actor_id: string | null;
+  details: Record<string, unknown>;
+}): Promise<AuditEvent> {
+  const { data, error } = await sb()
+    .from("audit_events")
+    .insert(event)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as AuditEvent;
+}

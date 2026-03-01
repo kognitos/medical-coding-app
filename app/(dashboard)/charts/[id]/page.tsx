@@ -18,6 +18,11 @@ import {
   CircleDot,
   ChevronDown,
   ChevronRight,
+  Zap,
+  Eye,
+  Upload,
+  Ban,
+  type LucideIcon,
 } from "lucide-react";
 import {
   getChartById,
@@ -27,6 +32,9 @@ import {
   getAuditEventsForChart,
   getRun,
   getRunEvents,
+  createRun,
+  updateChart,
+  insertAuditEvent,
 } from "@/lib/api";
 import { DOMAIN } from "@/lib/domain.config";
 import { useAuth } from "@/lib/auth-context";
@@ -39,9 +47,8 @@ import type {
   AuditEvent,
   KognitosRun,
   KognitosRunEvent,
-  SuggestedCode,
-  FinalCode,
 } from "@/lib/types";
+import type { SuggestedCode, FinalCode } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -65,7 +72,7 @@ const currencyFmt = new Intl.NumberFormat("en-US", {
 
 function nextAction(status: string): string {
   const map: Record<string, string> = {
-    pending_coding: "Awaiting auto-coding by Kognitos AI",
+    pending_coding: "Run Kognitos AI auto-coding or start manual review",
     auto_coded: "Review suggested codes and accept, modify, or query",
     in_review: "Coder is reviewing — verify codes against clinical documentation",
     query_sent: "Waiting for physician response to documentation query",
@@ -75,6 +82,67 @@ function nextAction(status: string): string {
   };
   return map[status] ?? "No action required";
 }
+
+interface StatusAction {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  variant: "default" | "outline" | "destructive";
+  requiredActions: string[];
+}
+
+const STATUS_ACTIONS: Record<string, StatusAction[]> = {
+  pending_coding: [
+    { key: "run_auto_coding", label: "Run Auto-Coding", icon: Zap, variant: "default", requiredActions: ["review_codes", "accept_codes"] },
+    { key: "start_review", label: "Start Manual Review", icon: Eye, variant: "outline", requiredActions: ["review_codes"] },
+    { key: "assign", label: "Assign", icon: UserPlus, variant: "outline", requiredActions: ["assign"] },
+  ],
+  auto_coded: [
+    { key: "accept_codes", label: "Accept Codes", icon: CheckCircle, variant: "default", requiredActions: ["accept_codes"] },
+    { key: "start_review", label: "Modify & Review", icon: Edit3, variant: "outline", requiredActions: ["modify_codes"] },
+    { key: "send_query", label: "Send Query", icon: Send, variant: "outline", requiredActions: ["send_query"] },
+    { key: "assign", label: "Assign", icon: UserPlus, variant: "outline", requiredActions: ["assign"] },
+  ],
+  in_review: [
+    { key: "submit_codes", label: "Submit Codes", icon: Upload, variant: "default", requiredActions: ["accept_codes"] },
+    { key: "send_query", label: "Send Query", icon: Send, variant: "outline", requiredActions: ["send_query"] },
+    { key: "assign", label: "Assign", icon: UserPlus, variant: "outline", requiredActions: ["assign"] },
+  ],
+  query_sent: [
+    { key: "resolve_query", label: "Resolve Query", icon: CheckCircle, variant: "default", requiredActions: ["review_codes"] },
+    { key: "assign", label: "Assign", icon: UserPlus, variant: "outline", requiredActions: ["assign"] },
+  ],
+  coded: [
+    { key: "audit", label: "Audit", icon: ClipboardCheck, variant: "default", requiredActions: ["audit"] },
+    { key: "override_codes", label: "Override Codes", icon: Edit3, variant: "outline", requiredActions: ["override_codes"] },
+    { key: "reject_codes", label: "Reject to Review", icon: Ban, variant: "outline", requiredActions: ["reject_codes"] },
+  ],
+  audited: [
+    { key: "finalize", label: "Finalize", icon: FileCheck, variant: "default", requiredActions: ["finalize"] },
+    { key: "override_codes", label: "Override Codes", icon: Edit3, variant: "outline", requiredActions: ["override_codes"] },
+  ],
+  finalized: [],
+};
+
+// SOP-routed actions go through Kognitos createRun().
+// Direct CRUD actions go through updateChart() + insertAuditEvent().
+const SOP_ACTIONS = new Set([
+  "run_auto_coding",
+  "accept_codes",
+  "submit_codes",
+  "send_query",
+  "audit",
+  "finalize",
+]);
+
+const SOP_ACTION_MAP: Record<string, string> = {
+  run_auto_coding: "auto-code-chart",
+  accept_codes: "accept-suggested-codes",
+  submit_codes: "submit-reviewed-codes",
+  send_query: "send-physician-query",
+  audit: "audit-chart",
+  finalize: "finalize-chart",
+};
 
 function RunTraceEvent({ event }: { event: KognitosRunEvent }) {
   const [expanded, setExpanded] = useState(false);
@@ -203,37 +271,84 @@ export default function ChartDetailPage({
     });
   }, [chart?.kognitos_run_id]);
 
-  const handleAction = (
-    action: string,
-    payload?: { status?: string; final_codes?: FinalCode[]; assigned_to?: string }
-  ) => {
-    if (!chart) return;
-    if (action === "accept_codes") {
-      setChart({
-        ...chart,
-        status: "coded",
-        final_codes: chart.suggested_codes.map((s) => ({
-          code: s.code,
-          type: s.type,
-          description: s.description,
-          source: "auto" as const,
-        })),
-      });
-    } else if (action === "send_query") {
-      setChart({ ...chart, status: "query_sent" });
-    } else if (action === "finalize") {
-      setChart({
-        ...chart,
-        status: "finalized",
-        finalized_at: new Date().toISOString(),
-      });
-    } else if (action === "audit") {
-      setChart({ ...chart, status: "audited" });
-    } else if (action === "override_codes") {
-      // Prompt-based — placeholder
-      alert("Override Codes: In production, this would open a prompt to modify codes.");
-    } else if (action === "assign" && payload?.assigned_to) {
-      setChart({ ...chart, assigned_to: payload.assigned_to });
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  async function refreshChart() {
+    const fresh = await getChartById(id);
+    if (fresh) setChart(fresh);
+    const evts = await getAuditEventsForChart(id);
+    setAuditEvents(evts);
+  }
+
+  const handleAction = async (action: string) => {
+    if (!chart || actionLoading) return;
+    setActionLoading(action);
+
+    try {
+      if (SOP_ACTIONS.has(action)) {
+        // --- SOP-routed: complex business logic through Kognitos ---
+        const sopId = SOP_ACTION_MAP[action];
+        await createRun(sopId, {
+          chart_id: chart.id,
+          actor_id: user?.id ?? "",
+          department: chart.department,
+        });
+        await refreshChart();
+      } else if (action === "start_review") {
+        // --- Direct CRUD: simple status transition ---
+        await updateChart(chart.id, {
+          status: "in_review",
+          assigned_to: user?.id ?? null,
+        });
+        await insertAuditEvent({
+          id: `ae-${Date.now()}`,
+          chart_id: chart.id,
+          action: "review_started",
+          actor_id: user?.id ?? null,
+          details: {},
+        });
+        await refreshChart();
+      } else if (action === "resolve_query") {
+        await updateChart(chart.id, { status: "in_review" });
+        await insertAuditEvent({
+          id: `ae-${Date.now()}`,
+          chart_id: chart.id,
+          action: "query_resolved",
+          actor_id: user?.id ?? null,
+          details: {},
+        });
+        await refreshChart();
+      } else if (action === "reject_codes") {
+        await updateChart(chart.id, { status: "in_review" });
+        await insertAuditEvent({
+          id: `ae-${Date.now()}`,
+          chart_id: chart.id,
+          action: "codes_rejected",
+          actor_id: user?.id ?? null,
+          details: {},
+        });
+        await refreshChart();
+      } else if (action === "override_codes") {
+        alert("Override Codes: In production, this opens an editor to modify codes.");
+      } else if (action === "assign") {
+        const uid = prompt("Enter user ID to assign:");
+        if (uid) {
+          await updateChart(chart.id, { assigned_to: uid });
+          await insertAuditEvent({
+            id: `ae-${Date.now()}`,
+            chart_id: chart.id,
+            action: "assigned",
+            actor_id: user?.id ?? null,
+            details: { assigned_to: uid },
+          });
+          await refreshChart();
+        }
+      }
+    } catch (err) {
+      console.error(`Action "${action}" failed:`, err);
+      alert(`Action failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -397,7 +512,7 @@ export default function ChartDetailPage({
                           {s.description}
                         </span>
                         <Badge variant="secondary" className="ml-auto">
-                          {Math.round(s.confidence)}%
+                          {Math.round(s.confidence * 100)}%
                         </Badge>
                       </li>
                     ))}
@@ -619,74 +734,47 @@ export default function ChartDetailPage({
               <CardTitle className="text-sm">Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {user && canPerformAction(user.role, "accept_codes") && (
-                <Button
-                  size="sm"
-                  className="w-full justify-start gap-2"
-                  onClick={() => handleAction("accept_codes")}
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  Accept Codes
-                </Button>
-              )}
-              {user && canPerformAction(user.role, "send_query") && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full justify-start gap-2"
-                  onClick={() => handleAction("send_query")}
-                >
-                  <Send className="h-4 w-4" />
-                  Send Query
-                </Button>
-              )}
-              {user && canPerformAction(user.role, "finalize") && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full justify-start gap-2"
-                  onClick={() => handleAction("finalize")}
-                >
-                  <FileCheck className="h-4 w-4" />
-                  Finalize
-                </Button>
-              )}
-              {user && canPerformAction(user.role, "audit") && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full justify-start gap-2"
-                  onClick={() => handleAction("audit")}
-                >
-                  <ClipboardCheck className="h-4 w-4" />
-                  Audit
-                </Button>
-              )}
-              {user && canPerformAction(user.role, "override_codes") && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full justify-start gap-2"
-                  onClick={() => handleAction("override_codes")}
-                >
-                  <Edit3 className="h-4 w-4" />
-                  Override Codes
-                </Button>
-              )}
-              {user && canPerformAction(user.role, "assign") && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full justify-start gap-2"
-                  onClick={() => {
-                    const uid = prompt("Enter user ID to assign:");
-                    if (uid) handleAction("assign", { assigned_to: uid });
-                  }}
-                >
-                  <UserPlus className="h-4 w-4" />
-                  Assign
-                </Button>
-              )}
+              {(() => {
+                const isTerminal = (DOMAIN.terminalStatuses as readonly string[]).includes(chart.status);
+                const actions = STATUS_ACTIONS[chart.status] ?? [];
+                const visibleActions = actions.filter((a) =>
+                  user && a.requiredActions.some((ra) => canPerformAction(user.role, ra))
+                );
+
+                if (isTerminal) {
+                  return (
+                    <p className="text-sm text-muted-foreground">
+                      {DOMAIN.entity.singular} finalized — no further actions.
+                    </p>
+                  );
+                }
+
+                if (visibleActions.length === 0) {
+                  return (
+                    <p className="text-sm text-muted-foreground">
+                      No actions available for your role at this stage.
+                    </p>
+                  );
+                }
+
+                return visibleActions.map((a) => {
+                  const Icon = a.icon;
+                  const isLoading = actionLoading === a.key;
+                  return (
+                    <Button
+                      key={a.key}
+                      size="sm"
+                      variant={a.variant}
+                      className="w-full justify-start gap-2"
+                      disabled={!!actionLoading}
+                      onClick={() => handleAction(a.key)}
+                    >
+                      <Icon className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                      {isLoading ? "Processing…" : a.label}
+                    </Button>
+                  );
+                });
+              })()}
             </CardContent>
           </Card>
 

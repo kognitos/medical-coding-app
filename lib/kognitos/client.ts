@@ -1,5 +1,9 @@
 /**
  * Mock Kognitos API client for medical coding SOPs.
+ *
+ * Read operations return static mock data.
+ * createRun() simulates SOP execution: it writes to Supabase via lib/db
+ * and returns a completed KognitosRun with outputs.
  */
 
 import type {
@@ -7,7 +11,9 @@ import type {
   KognitosRunEvent,
   KognitosInsights,
   KognitosMetricResult,
+  SuggestedCode,
 } from "@/lib/types";
+import { updateChart, insertAuditEvent } from "@/lib/db";
 
 // ── Mock Runs ──────────────────────────────────────────────────
 
@@ -415,6 +421,230 @@ export async function getAutomationRunAggregates(): Promise<{
       },
     ],
   };
+}
+
+// ── SOP Execution (createRun) ──────────────────────────────────
+
+const AUTO_CODE_SUGGESTIONS: Record<string, SuggestedCode[]> = {
+  Emergency: [
+    { code: "99283", type: "CPT", description: "ED visit, moderate severity", confidence: 0.92 },
+    { code: "71046", type: "CPT", description: "Chest X-ray, 2 views", confidence: 0.88 },
+    { code: "R07.9", type: "ICD-10", description: "Chest pain, unspecified", confidence: 0.95 },
+    { code: "I25.10", type: "ICD-10", description: "Atherosclerotic heart disease", confidence: 0.78 },
+  ],
+  Observation: [
+    { code: "99236", type: "CPT", description: "Observation care, same day admit/discharge", confidence: 0.90 },
+    { code: "R55", type: "ICD-10", description: "Syncope and collapse", confidence: 0.96 },
+    { code: "I49.9", type: "ICD-10", description: "Cardiac arrhythmia, unspecified", confidence: 0.72 },
+  ],
+  Outpatient: [
+    { code: "99214", type: "CPT", description: "Office visit, moderate complexity", confidence: 0.94 },
+    { code: "E11.65", type: "ICD-10", description: "Type 2 diabetes with hyperglycemia", confidence: 0.91 },
+    { code: "Z79.84", type: "ICD-10", description: "Long-term use of oral hypoglycemics", confidence: 0.85 },
+  ],
+  Inpatient: [
+    { code: "99223", type: "CPT", description: "Initial hospital care, high complexity", confidence: 0.93 },
+    { code: "99232", type: "CPT", description: "Subsequent hospital care, moderate", confidence: 0.89 },
+    { code: "J44.1", type: "ICD-10", description: "COPD with acute exacerbation", confidence: 0.96 },
+  ],
+  Surgical: [
+    { code: "27447", type: "CPT", description: "Total knee arthroplasty", confidence: 0.97 },
+    { code: "M17.11", type: "ICD-10", description: "Primary osteoarthritis, right knee", confidence: 0.94 },
+  ],
+  Radiology: [
+    { code: "74178", type: "CPT", description: "CT abdomen & pelvis with contrast", confidence: 0.96 },
+    { code: "R10.9", type: "ICD-10", description: "Unspecified abdominal pain", confidence: 0.88 },
+  ],
+};
+
+type SopId =
+  | "auto-code-chart"
+  | "accept-suggested-codes"
+  | "submit-reviewed-codes"
+  | "send-physician-query"
+  | "audit-chart"
+  | "finalize-chart";
+
+async function executeAutoCoding(inputs: Record<string, string>) {
+  const chartId = inputs.chart_id;
+  const department = inputs.department ?? "Inpatient";
+  const codes = AUTO_CODE_SUGGESTIONS[department] ?? AUTO_CODE_SUGGESTIONS["Inpatient"];
+  const runId = `run-sim-${Date.now()}`;
+
+  const chart = await updateChart(chartId, {
+    status: "auto_coded",
+    suggested_codes: codes,
+    kognitos_run_id: `workspaces/ws-1/runs/${runId}`,
+  });
+
+  await insertAuditEvent({
+    id: `ae-${Date.now()}`,
+    chart_id: chartId,
+    action: "auto_coded",
+    actor_id: inputs.actor_id ?? null,
+    details: { sop: "auto-code-chart", run_id: runId, code_count: codes.length },
+  });
+
+  return {
+    status: "auto_coded",
+    code_count: String(codes.length),
+    department: chart.department,
+    confidence: String(Math.round(codes.reduce((s, c) => s + c.confidence, 0) / codes.length * 100)),
+  };
+}
+
+async function executeAcceptCodes(inputs: Record<string, string>) {
+  const chartId = inputs.chart_id;
+  const { getChartById } = await import("@/lib/db");
+  const chart = await getChartById(chartId);
+  if (!chart) throw new Error(`Chart ${chartId} not found`);
+
+  const finalCodes = chart.suggested_codes.map((s) => ({
+    code: s.code,
+    type: s.type,
+    description: s.description,
+    source: "auto" as const,
+  }));
+  const now = new Date().toISOString();
+
+  await updateChart(chartId, {
+    status: "coded",
+    final_codes: finalCodes,
+    coded_at: now,
+  });
+
+  await insertAuditEvent({
+    id: `ae-${Date.now()}`,
+    chart_id: chartId,
+    action: "codes_accepted",
+    actor_id: inputs.actor_id ?? null,
+    details: { sop: "accept-suggested-codes", code_count: finalCodes.length, source: "auto" },
+  });
+
+  return { status: "coded", coded_at: now, code_count: String(finalCodes.length) };
+}
+
+async function executeSubmitCodes(inputs: Record<string, string>) {
+  const chartId = inputs.chart_id;
+  const codesJson = inputs.final_codes;
+  const now = new Date().toISOString();
+
+  let finalCodes;
+  if (codesJson) {
+    finalCodes = JSON.parse(codesJson);
+  } else {
+    const { getChartById } = await import("@/lib/db");
+    const chart = await getChartById(chartId);
+    if (!chart) throw new Error(`Chart ${chartId} not found`);
+    finalCodes = chart.suggested_codes.map((s) => ({
+      code: s.code, type: s.type, description: s.description, source: "manual" as const,
+    }));
+  }
+
+  await updateChart(chartId, {
+    status: "coded",
+    final_codes: finalCodes,
+    coded_at: now,
+  });
+
+  await insertAuditEvent({
+    id: `ae-${Date.now()}`,
+    chart_id: chartId,
+    action: "codes_submitted",
+    actor_id: inputs.actor_id ?? null,
+    details: { sop: "submit-reviewed-codes", code_count: finalCodes.length, source: "manual" },
+  });
+
+  return { status: "coded", coded_at: now, code_count: String(finalCodes.length) };
+}
+
+async function executeSendQuery(inputs: Record<string, string>) {
+  const chartId = inputs.chart_id;
+
+  await updateChart(chartId, { status: "query_sent" });
+
+  await insertAuditEvent({
+    id: `ae-${Date.now()}`,
+    chart_id: chartId,
+    action: "query_sent",
+    actor_id: inputs.actor_id ?? null,
+    details: { sop: "send-physician-query", query_text: inputs.query_text ?? "" },
+  });
+
+  return { status: "query_sent" };
+}
+
+async function executeAuditChart(inputs: Record<string, string>) {
+  const chartId = inputs.chart_id;
+
+  await updateChart(chartId, { status: "audited" });
+
+  await insertAuditEvent({
+    id: `ae-${Date.now()}`,
+    chart_id: chartId,
+    action: "audited",
+    actor_id: inputs.actor_id ?? null,
+    details: { sop: "audit-chart", result: "pass" },
+  });
+
+  return { status: "audited", audit_result: "pass" };
+}
+
+async function executeFinalizeChart(inputs: Record<string, string>) {
+  const chartId = inputs.chart_id;
+  const now = new Date().toISOString();
+
+  await updateChart(chartId, { status: "finalized", finalized_at: now });
+
+  await insertAuditEvent({
+    id: `ae-${Date.now()}`,
+    chart_id: chartId,
+    action: "finalized",
+    actor_id: inputs.actor_id ?? null,
+    details: { sop: "finalize-chart", finalized_at: now },
+  });
+
+  return { status: "finalized", finalized_at: now };
+}
+
+const SOP_EXECUTORS: Record<SopId, (inputs: Record<string, string>) => Promise<Record<string, string>>> = {
+  "auto-code-chart": executeAutoCoding,
+  "accept-suggested-codes": executeAcceptCodes,
+  "submit-reviewed-codes": executeSubmitCodes,
+  "send-physician-query": executeSendQuery,
+  "audit-chart": executeAuditChart,
+  "finalize-chart": executeFinalizeChart,
+};
+
+/**
+ * Simulates POST /api/v1/.../runs (trigger a new SOP run).
+ * In production this calls the Kognitos REST API; the SOP writes to Supabase.
+ * In mock mode we execute the DB writes here and return a completed Run.
+ */
+export async function createRun(
+  sopId: string,
+  userInputs: Record<string, string>,
+): Promise<KognitosRun> {
+  const executor = SOP_EXECUTORS[sopId as SopId];
+  if (!executor) throw new Error(`Unknown SOP: ${sopId}`);
+
+  const now = new Date().toISOString();
+  const runId = `run-${sopId}-${Date.now()}`;
+
+  const outputs = await executor(userInputs);
+
+  const run: KognitosRun = {
+    name: `workspaces/ws-1/runs/${runId}`,
+    createTime: now,
+    updateTime: new Date().toISOString(),
+    state: { completed: { outputs } },
+    stage: sopId,
+    stageVersion: "1.0",
+    invocationDetails: { invocationSource: "app" },
+    userInputs,
+  };
+
+  return run;
 }
 
 // ── Helpers ────────────────────────────────────────────────────

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Download, Plus } from "lucide-react";
 
 import type { Chart } from "@/lib/types";
 import { DOMAIN } from "@/lib/domain.config";
-import { listCharts } from "@/lib/api";
+import { listCharts, insertChart, insertAuditEvent } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { canPerformAction } from "@/lib/role-permissions";
 import { Button } from "@/components/ui/button";
@@ -107,6 +108,7 @@ function exportToCSV(items: Chart[]) {
 
 export default function WorklistPage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
   const userRole = user?.role ?? "coder";
   const showCreate = canPerformAction(userRole, "review_codes");
 
@@ -118,6 +120,11 @@ export default function WorklistPage() {
   useEffect(() => {
     listCharts().then(setAllItems);
   }, []);
+
+  useEffect(() => {
+    const q = searchParams.get("search");
+    if (q) setFilters((prev) => ({ ...prev, search: q }));
+  }, [searchParams]);
 
   const filteredItems = useMemo(
     () => applyFilters(allItems, filters),
@@ -178,7 +185,7 @@ export default function WorklistPage() {
             </DialogDescription>
           </DialogHeader>
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               const form = e.currentTarget;
               const formData = new FormData(form);
@@ -189,9 +196,10 @@ export default function WorklistPage() {
               const department = (formData.get("department") as string) || "";
 
               const now = new Date().toISOString();
+              const chartId = `cht-new-${Date.now()}`;
               const newItem: Chart = {
-                id: `cht-new-${Date.now()}`,
-                org_id: user?.org_id ?? "org_001",
+                id: chartId,
+                org_id: user?.org_id ?? "org-1",
                 title,
                 description: "",
                 patient_mrn: patientMrn,
@@ -217,11 +225,22 @@ export default function WorklistPage() {
                 episode_id: null,
               };
 
-              setAllItems((prev) => [newItem, ...prev]);
-              setShowNewDialog(false);
-              setNewPriority("routine");
-              form.reset();
-              alert(`${DOMAIN.entity.singular} created successfully`);
+              try {
+                const saved = await insertChart(newItem);
+                await insertAuditEvent({
+                  id: `ae-${Date.now()}`,
+                  chart_id: chartId,
+                  action: "chart_created",
+                  actor_id: user?.id ?? null,
+                  details: { title, department, priority: newPriority },
+                });
+                setAllItems((prev) => [saved, ...prev]);
+                setShowNewDialog(false);
+                setNewPriority("routine");
+                form.reset();
+              } catch (err) {
+                alert(`Failed to create chart: ${err instanceof Error ? err.message : String(err)}`);
+              }
             }}
             className="space-y-4"
           >

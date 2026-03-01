@@ -8,6 +8,9 @@ export {
   getDocumentsForChart,
   getCommentsForChart,
   getAuditEventsForChart,
+  updateChart,
+  insertChart,
+  insertAuditEvent,
 } from "./charts";
 
 export {
@@ -31,5 +34,6 @@ export {
   getRun,
   listRuns,
   getRunEvents,
+  createRun,
   getAutomationRunAggregates,
 } from "@/lib/kognitos";
