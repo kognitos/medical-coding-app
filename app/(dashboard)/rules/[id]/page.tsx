@@ -94,7 +94,7 @@ export default function RuleDetailPage({
               <CardTitle className="text-base">Criteria</CardTitle>
             </CardHeader>
             <CardContent>
-              <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed">
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
                 {rule.criteria}
               </pre>
             </CardContent>
