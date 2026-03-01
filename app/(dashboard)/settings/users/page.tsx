@@ -21,9 +21,9 @@ import type { User } from "@/lib/types";
 const ROLE_BADGE_VARIANT: Record<string, "default" | "secondary" | "outline"> =
   {
     admin: "default",
-    reviewer: "secondary",
-    manager: "secondary",
-    requester: "outline",
+    auditor: "secondary",
+    coding_manager: "secondary",
+    coder: "outline",
   };
 
 export default function UsersSettingsPage() {

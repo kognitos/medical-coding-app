@@ -1,13 +1,11 @@
 /**
  * Data access layer — all reads go through Supabase.
- *
- * CUSTOMIZE: Rename table names in the .from() calls to match your Supabase schema.
- * Each fetcher maps 1-to-1 with a database table.
+ * Table names match the medical coding schema.
  */
 
 import { supabase } from "./supabase";
 import type {
-  Request,
+  Chart,
   User,
   Document,
   Comment,
@@ -16,7 +14,6 @@ import type {
   Rule,
 } from "./types";
 
-/** Throws if Supabase client is not configured. */
 function sb() {
   if (!supabase)
     throw new Error(
@@ -26,12 +23,11 @@ function sb() {
 }
 
 // ── Full-table fetchers ────────────────────────────────────────
-// CUSTOMIZE: Change table names (first arg to .from()) to match your schema.
 
-export async function getAllRequests(): Promise<Request[]> {
-  const { data, error } = await sb().from("requests").select("*");
+export async function getAllCharts(): Promise<Chart[]> {
+  const { data, error } = await sb().from("charts").select("*");
   if (error) throw error;
-  return data as Request[];
+  return data as Chart[];
 }
 
 export async function getAllUsers(): Promise<User[]> {
@@ -72,14 +68,14 @@ export async function getAllRules(): Promise<Rule[]> {
 
 // ── Single-record fetchers ─────────────────────────────────────
 
-export async function getRequestById(id: string): Promise<Request | undefined> {
+export async function getChartById(id: string): Promise<Chart | undefined> {
   const { data, error } = await sb()
-    .from("requests")
+    .from("charts")
     .select("*")
     .eq("id", id)
     .single();
   if (error) return undefined;
-  return data as Request;
+  return data as Chart;
 }
 
 export async function getUserById(id: string): Promise<User | undefined> {
@@ -103,31 +99,30 @@ export async function getRuleById(id: string): Promise<Rule | undefined> {
 }
 
 // ── Relational fetchers ────────────────────────────────────────
-// CUSTOMIZE: Adjust foreign-key column names to match your schema.
 
-export async function getDocumentsForRequest(requestId: string): Promise<Document[]> {
+export async function getDocumentsForChart(chartId: string): Promise<Document[]> {
   const { data, error } = await sb()
     .from("documents")
     .select("*")
-    .eq("request_id", requestId);
+    .eq("chart_id", chartId);
   if (error) throw error;
   return data as Document[];
 }
 
-export async function getCommentsForRequest(requestId: string): Promise<Comment[]> {
+export async function getCommentsForChart(chartId: string): Promise<Comment[]> {
   const { data, error } = await sb()
     .from("comments")
     .select("*")
-    .eq("request_id", requestId);
+    .eq("chart_id", chartId);
   if (error) throw error;
   return data as Comment[];
 }
 
-export async function getAuditEventsForRequest(requestId: string): Promise<AuditEvent[]> {
+export async function getAuditEventsForChart(chartId: string): Promise<AuditEvent[]> {
   const { data, error } = await sb()
     .from("audit_events")
     .select("*")
-    .eq("request_id", requestId);
+    .eq("chart_id", chartId);
   if (error) throw error;
   return data as AuditEvent[];
 }

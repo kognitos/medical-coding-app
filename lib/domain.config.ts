@@ -1,7 +1,6 @@
 /**
- * Central domain configuration.
+ * Central domain configuration for the Medical Coding (CPT/ICD-10) application.
  *
- * CUSTOMIZE THIS FILE to adapt the template for your domain.
  * Every generic component (sidebar, topbar, status-badge, worklist-filters,
  * login, role-permissions) reads from this config.
  */
@@ -31,62 +30,59 @@ export interface RoleConfig {
 export interface NavItem {
   label: string;
   href: string;
-  icon: string; // Lucide icon name
-  roles?: string[]; // if set, only these roles see it; omit for all
+  icon: string;
+  roles?: string[];
 }
 
 export const DOMAIN = {
-  // ── App identity ──────────────────────────────────────────────
-  appName: "WorkflowApp",
-  appDescription: "Workflow Management Platform",
-  appLogo: "Layers", // Lucide icon name
-  entitySlug: "requests", // used in URLs: /requests/[id]
+  appName: "MedCode",
+  appDescription: "Autonomous Medical Coding Platform",
+  appLogo: "Stethoscope",
+  entitySlug: "charts",
 
   entity: {
-    singular: "Request",
-    plural: "Requests",
+    singular: "Chart",
+    plural: "Charts",
   },
 
-  // ── Statuses ──────────────────────────────────────────────────
   statuses: [
-    { value: "draft", label: "Draft", variant: "secondary" },
-    { value: "submitted", label: "Submitted", variant: "default" },
-    { value: "under_review", label: "Under Review", variant: "warning" },
-    { value: "approved", label: "Approved", variant: "success" },
-    { value: "rejected", label: "Rejected", variant: "destructive" },
-    { value: "closed", label: "Closed", variant: "outline" },
+    { value: "pending_coding", label: "Pending Coding", variant: "secondary" },
+    { value: "auto_coded", label: "Auto-Coded", variant: "default" },
+    { value: "in_review", label: "In Review", variant: "warning" },
+    { value: "query_sent", label: "Query Sent", variant: "outline" },
+    { value: "coded", label: "Coded", variant: "success" },
+    { value: "audited", label: "Audited", variant: "success" },
+    { value: "finalized", label: "Finalized", variant: "success" },
   ] satisfies StatusConfig[],
 
-  terminalStatuses: ["approved", "rejected", "closed"],
+  terminalStatuses: ["finalized"],
 
-  // ── Priorities ────────────────────────────────────────────────
   priorities: [
-    { value: "urgent", label: "Urgent" },
-    { value: "standard", label: "Standard" },
+    { value: "stat", label: "STAT" },
+    { value: "routine", label: "Routine" },
   ],
 
-  // ── Roles ─────────────────────────────────────────────────────
   roles: [
     {
-      value: "requester",
-      label: "Requester",
+      value: "coder",
+      label: "Coder",
       defaultPath: "/",
-      allowedPaths: ["/", "/requests", "/notifications"],
-      actions: ["create", "submit"],
+      allowedPaths: ["/", "/charts", "/rules", "/notifications"],
+      actions: ["review_codes", "accept_codes", "modify_codes", "send_query", "finalize"],
     },
     {
-      value: "reviewer",
-      label: "Reviewer",
+      value: "auditor",
+      label: "Auditor",
       defaultPath: "/",
-      allowedPaths: ["/", "/requests", "/rules", "/notifications"],
-      actions: ["approve", "reject", "assign", "escalate"],
+      allowedPaths: ["/", "/charts", "/rules", "/notifications", "/dashboard"],
+      actions: ["audit", "override_codes", "send_query", "reject_codes"],
     },
     {
-      value: "manager",
-      label: "Manager",
+      value: "coding_manager",
+      label: "Coding Manager",
       defaultPath: "/dashboard",
-      allowedPaths: ["/", "/dashboard", "/rules", "/notifications", "/settings"],
-      actions: ["assign"],
+      allowedPaths: ["/", "/charts", "/dashboard", "/rules", "/notifications", "/settings"],
+      actions: ["assign", "audit", "override_codes"],
     },
     {
       value: "admin",
@@ -97,17 +93,14 @@ export const DOMAIN = {
     },
   ] satisfies RoleConfig[],
 
-  // ── Navigation ────────────────────────────────────────────────
   navItems: [
     { label: "Worklist", href: "/", icon: "ClipboardList" },
     { label: "Dashboard", href: "/dashboard", icon: "BarChart3" },
-    { label: "Rules", href: "/rules", icon: "BookOpen" },
+    { label: "Coding Rules", href: "/rules", icon: "BookOpen" },
     { label: "Notifications", href: "/notifications", icon: "Bell" },
-    { label: "Settings", href: "/settings", icon: "Settings", roles: ["admin", "manager"] },
+    { label: "Settings", href: "/settings", icon: "Settings", roles: ["admin", "coding_manager"] },
   ] satisfies NavItem[],
 } as const;
-
-// ── Derived helpers ─────────────────────────────────────────────
 
 export function getStatusConfig(value: string): StatusConfig | undefined {
   return (DOMAIN.statuses as readonly StatusConfig[]).find((s) => s.value === value);

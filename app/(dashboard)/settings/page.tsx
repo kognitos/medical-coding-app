@@ -18,7 +18,7 @@ import { DOMAIN } from "@/lib/domain.config";
 
 /* CUSTOMIZE: Adjust organization fields for your domain. */
 export default function SettingsPage() {
-  const [orgName, setOrgName] = useState("Example Organization");
+  const [orgName, setOrgName] = useState("Mercy Health System");
   const [timezone, setTimezone] = useState("America/New_York");
   const [saved, setSaved] = useState(false);
 

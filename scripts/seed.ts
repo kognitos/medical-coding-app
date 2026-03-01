@@ -36,7 +36,7 @@ async function main() {
     organizations,
     users,
     rules,
-    requests,
+    charts,
     documents,
     comments,
     auditEvents,
@@ -46,7 +46,7 @@ async function main() {
   await upsert("organizations", organizations);
   await upsert("users", users);
   await upsert("rules", rules);
-  await upsert("requests", requests);
+  await upsert("charts", charts);
   await upsert("documents", documents);
   await upsert("comments", comments);
   await upsert("audit_events", auditEvents);

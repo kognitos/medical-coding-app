@@ -59,9 +59,9 @@ export default function RulesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Rules</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Coding Rules</h1>
         <p className="text-muted-foreground">
-          Browse and manage business rules for your workflow
+          Browse and manage coding compliance rules, CCI edits, and validation criteria
         </p>
       </div>
 

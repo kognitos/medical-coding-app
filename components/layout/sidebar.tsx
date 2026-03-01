@@ -10,6 +10,7 @@ import {
   Settings,
   Layers,
   Menu,
+  Stethoscope,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Bell,
   Settings,
   Layers,
+  Stethoscope,
 };
 
 const LogoIcon = ICON_MAP[DOMAIN.appLogo] ?? Layers;

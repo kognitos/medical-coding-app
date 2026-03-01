@@ -1,8 +1,5 @@
 /**
- * Mock Kognitos API client.
- *
- * CUSTOMIZE: Replace the mock data below with real API calls to the Kognitos
- * platform, or adjust the mock runs / events to match your domain's SOPs.
+ * Mock Kognitos API client for medical coding SOPs.
  */
 
 import type {
@@ -13,7 +10,6 @@ import type {
 } from "@/lib/types";
 
 // ── Mock Runs ──────────────────────────────────────────────────
-// CUSTOMIZE: Add, remove, or modify runs to match your workflow scenarios.
 
 const mockRuns: KognitosRun[] = [
   {
@@ -23,56 +19,123 @@ const mockRuns: KognitosRun[] = [
     state: {
       completed: {
         outputs: {
-          status: "approved",
-          reviewer_notes: "Budget within limits",
-          confidence_score: "85",
+          status: "auto_coded",
+          cpt_codes: "99213, 99214",
+          icd10_codes: "I10, E11.9, J44.1",
+          drg: "MS-DRG 291",
+          confidence_score: "92",
         },
       },
     },
-    stage: "review-request",
-    stageVersion: "1.0",
+    stage: "auto-code-clinical-notes",
+    stageVersion: "2.1",
     invocationDetails: { invocationSource: "api" },
     userInputs: {
-      request_id: "req-4",
-      title: "Cloud Server Upgrade",
-      category: "equipment",
+      chart_id: "cht-3",
+      encounter_number: "ENC-2026-0103",
+      department: "Inpatient",
     },
   },
   {
     name: "workspaces/ws-1/runs/run-2",
     createTime: "2026-02-21T14:30:00Z",
-    updateTime: "2026-02-21T14:33:15Z",
+    updateTime: "2026-02-21T14:35:10Z",
     state: {
       completed: {
         outputs: {
-          status: "under_review",
-          escalation_reason: "Exceeds budget threshold",
-          assigned_to: "user-3",
+          status: "auto_coded",
+          cpt_codes: "27447",
+          icd10_codes: "M17.11, Z96.651",
+          drg: "MS-DRG 470",
+          confidence_score: "97",
         },
       },
     },
-    stage: "escalate-request",
+    stage: "auto-code-clinical-notes",
+    stageVersion: "2.1",
+    invocationDetails: { invocationSource: "api" },
+    userInputs: {
+      chart_id: "cht-5",
+      encounter_number: "ENC-2026-0105",
+      department: "Surgical",
+    },
+  },
+  {
+    name: "workspaces/ws-1/runs/run-3",
+    createTime: "2026-02-22T08:15:00Z",
+    updateTime: "2026-02-22T08:18:45Z",
+    state: {
+      completed: {
+        outputs: {
+          validation_result: "pass",
+          bundling_issues: "0",
+          specificity_warnings: "1",
+          notes: "ICD-10 E11 should be coded to highest specificity",
+        },
+      },
+    },
+    stage: "validate-code-bundling",
+    stageVersion: "1.3",
+    invocationDetails: { invocationSource: "api" },
+    userInputs: {
+      chart_id: "cht-3",
+      cpt_codes: "99213, 99214",
+      icd10_codes: "I10, E11.9, J44.1",
+    },
+  },
+  {
+    name: "workspaces/ws-1/runs/run-4",
+    createTime: "2026-02-22T10:00:00Z",
+    updateTime: "2026-02-22T10:02:30Z",
+    state: {
+      awaitingGuidance: {
+        exception: "missing_documentation",
+        description: "Operative report does not specify laterality for knee replacement. Query physician for clarification.",
+      },
+    },
+    stage: "auto-code-clinical-notes",
+    stageVersion: "2.1",
+    invocationDetails: { invocationSource: "api" },
+    userInputs: {
+      chart_id: "cht-8",
+      encounter_number: "ENC-2026-0108",
+      department: "Surgical",
+    },
+  },
+  {
+    name: "workspaces/ws-1/runs/run-5",
+    createTime: "2026-02-23T11:00:00Z",
+    updateTime: "2026-02-23T11:03:20Z",
+    state: {
+      completed: {
+        outputs: {
+          drg_assigned: "MS-DRG 193",
+          relative_weight: "1.4237",
+          expected_reimbursement: "12450.00",
+          validation: "pass",
+        },
+      },
+    },
+    stage: "drg-assignment",
     stageVersion: "1.0",
     invocationDetails: { invocationSource: "api" },
     userInputs: {
-      request_id: "req-7",
-      title: "Annual Consulting Contract",
-      category: "consulting",
+      chart_id: "cht-6",
+      principal_dx: "J18.9",
+      secondary_dx: "J96.01, N17.9",
     },
   },
 ];
 
 // ── Mock Run Events ────────────────────────────────────────────
-// CUSTOMIZE: Adjust event descriptions and node kinds to reflect your SOP steps.
 
 const mockRunEvents: KognitosRunEvent[] = [
-  // --- run-1 events (review-request) ---
   {
     id: "evt-1-1",
     runId: "run-1",
     timestamp: "2026-02-20T09:00:05Z",
     type: "runUpdate",
-    description: "Run started for review-request SOP",
+    description: "Run started for auto-code-clinical-notes SOP",
   },
   {
     id: "evt-1-2",
@@ -80,8 +143,8 @@ const mockRunEvents: KognitosRunEvent[] = [
     timestamp: "2026-02-20T09:01:10Z",
     type: "executionJournal",
     nodeKind: "action",
-    description: "Fetched request details for req-4",
-    details: { request_id: "req-4" },
+    description: "Extracted clinical narrative from discharge summary",
+    details: { document_type: "discharge_summary", pages: 4 },
   },
   {
     id: "evt-1-3",
@@ -89,8 +152,8 @@ const mockRunEvents: KognitosRunEvent[] = [
     timestamp: "2026-02-20T09:02:00Z",
     type: "executionJournal",
     nodeKind: "decision",
-    description: "Evaluated budget rule — within limits",
-    details: { rule: "budget_check", result: "pass" },
+    description: "Identified primary diagnosis: Essential hypertension (I10)",
+    details: { confidence: 0.95 },
   },
   {
     id: "evt-1-4",
@@ -98,97 +161,119 @@ const mockRunEvents: KognitosRunEvent[] = [
     timestamp: "2026-02-20T09:02:45Z",
     type: "executionJournal",
     nodeKind: "action",
-    description: "Calculated confidence score: 85",
-    details: { confidence_score: 85 },
+    description: "Generated CPT codes: 99213 (Office visit), 99214 (Detailed visit)",
+    details: { cpt_count: 2 },
   },
   {
     id: "evt-1-5",
     runId: "run-1",
     timestamp: "2026-02-20T09:03:30Z",
     type: "executionJournal",
-    nodeKind: "action",
-    description: "Reviewer notes recorded: Budget within limits",
+    nodeKind: "decision",
+    description: "Validated CCI edits — no bundling conflicts detected",
+    details: { rule: "cci_edit_check", result: "pass" },
   },
   {
     id: "evt-1-6",
     runId: "run-1",
     timestamp: "2026-02-20T09:04:32Z",
     type: "runUpdate",
-    description: "Run completed — request approved",
-    details: { status: "approved" },
+    description: "Run completed — chart auto-coded with confidence 92%",
+    details: { status: "auto_coded", confidence: 92 },
   },
-
-  // --- run-2 events (escalate-request) ---
   {
     id: "evt-2-1",
     runId: "run-2",
     timestamp: "2026-02-21T14:30:05Z",
     type: "runUpdate",
-    description: "Run started for escalate-request SOP",
+    description: "Run started for auto-code-clinical-notes SOP",
   },
   {
     id: "evt-2-2",
     runId: "run-2",
     timestamp: "2026-02-21T14:31:20Z",
     type: "executionJournal",
-    nodeKind: "decision",
-    description: "Budget threshold exceeded — escalation required",
-    details: { rule: "budget_threshold", result: "fail" },
+    nodeKind: "action",
+    description: "Extracted operative report for total knee arthroplasty",
+    details: { document_type: "operative_report" },
   },
   {
     id: "evt-2-3",
     runId: "run-2",
-    timestamp: "2026-02-21T14:32:10Z",
+    timestamp: "2026-02-21T14:33:00Z",
     type: "executionJournal",
-    nodeKind: "action",
-    description: "Assigned escalation to user-3",
-    details: { assigned_to: "user-3" },
+    nodeKind: "decision",
+    description: "Assigned CPT 27447 (Total knee replacement) and ICD-10 M17.11",
+    details: { confidence: 0.97 },
   },
   {
     id: "evt-2-4",
     runId: "run-2",
-    timestamp: "2026-02-21T14:33:15Z",
+    timestamp: "2026-02-21T14:35:10Z",
     type: "runUpdate",
-    description: "Run completed — request under review (escalated)",
-    details: { status: "under_review" },
+    description: "Run completed — surgical chart auto-coded with confidence 97%",
+    details: { status: "auto_coded", confidence: 97 },
+  },
+  {
+    id: "evt-3-1",
+    runId: "run-3",
+    timestamp: "2026-02-22T08:15:05Z",
+    type: "runUpdate",
+    description: "Run started for validate-code-bundling SOP",
+  },
+  {
+    id: "evt-3-2",
+    runId: "run-3",
+    timestamp: "2026-02-22T08:16:30Z",
+    type: "executionJournal",
+    nodeKind: "decision",
+    description: "Checked CCI edits for CPT 99213 + 99214 — no conflict",
+  },
+  {
+    id: "evt-3-3",
+    runId: "run-3",
+    timestamp: "2026-02-22T08:17:45Z",
+    type: "executionJournal",
+    nodeKind: "decision",
+    description: "ICD-10 specificity warning: E11.9 could be more specific",
+    details: { rule: "specificity_check", code: "E11.9" },
+  },
+  {
+    id: "evt-3-4",
+    runId: "run-3",
+    timestamp: "2026-02-22T08:18:45Z",
+    type: "runUpdate",
+    description: "Validation complete — 1 specificity warning flagged",
   },
 ];
 
 // ── Mock Insights ──────────────────────────────────────────────
-// CUSTOMIZE: Adjust totals to stay consistent with your mock runs.
 
 const mockInsights: KognitosInsights = {
   valueInsight: {
-    totalMoneySavedUsd: "4200.00",
-    totalTimeSavedSecs: 1620,
+    totalMoneySavedUsd: "28500.00",
+    totalTimeSavedSecs: 54000,
   },
   runInsight: {
-    totalRunsCount: 2,
-    trend: { percentChange: 0, comparisonWindow: "week" },
+    totalRunsCount: 5,
+    trend: { percentChange: 25, comparisonWindow: "week" },
   },
   completionInsight: {
-    totalPercentCompletions: 100,
-    stp: 100,
+    totalPercentCompletions: 80,
+    stp: 80,
     completionsPerPeriod: [
-      {
-        windowLabel: "2026-02-20",
-        autoCompletedCount: 1,
-        manuallyResolvedCount: 0,
-      },
-      {
-        windowLabel: "2026-02-21",
-        autoCompletedCount: 1,
-        manuallyResolvedCount: 0,
-      },
+      { windowLabel: "2026-02-20", autoCompletedCount: 1, manuallyResolvedCount: 0 },
+      { windowLabel: "2026-02-21", autoCompletedCount: 1, manuallyResolvedCount: 0 },
+      { windowLabel: "2026-02-22", autoCompletedCount: 1, manuallyResolvedCount: 1 },
+      { windowLabel: "2026-02-23", autoCompletedCount: 1, manuallyResolvedCount: 0 },
     ],
   },
   awaitingGuidanceInsight: {
-    totalRunsAwaitingGuidance: 0,
+    totalRunsAwaitingGuidance: 1,
   },
 };
 
 // ── Mock Metrics ───────────────────────────────────────────────
-// CUSTOMIZE: Add or modify metric series to power your dashboard charts.
 
 const mockMetricResults: KognitosMetricResult[] = [
   {
@@ -196,23 +281,34 @@ const mockMetricResults: KognitosMetricResult[] = [
     interval: "1d",
     series: [
       {
-        tags: { stage: "review-request" },
+        tags: { stage: "auto-code-clinical-notes" },
         points: [
           { startTime: "2026-02-18T00:00:00Z", value: 0, windowLabel: "Feb 18" },
           { startTime: "2026-02-19T00:00:00Z", value: 0, windowLabel: "Feb 19" },
           { startTime: "2026-02-20T00:00:00Z", value: 1, windowLabel: "Feb 20" },
-          { startTime: "2026-02-21T00:00:00Z", value: 0, windowLabel: "Feb 21" },
+          { startTime: "2026-02-21T00:00:00Z", value: 1, windowLabel: "Feb 21" },
           { startTime: "2026-02-22T00:00:00Z", value: 0, windowLabel: "Feb 22" },
         ],
       },
       {
-        tags: { stage: "escalate-request" },
+        tags: { stage: "validate-code-bundling" },
         points: [
           { startTime: "2026-02-18T00:00:00Z", value: 0, windowLabel: "Feb 18" },
           { startTime: "2026-02-19T00:00:00Z", value: 0, windowLabel: "Feb 19" },
           { startTime: "2026-02-20T00:00:00Z", value: 0, windowLabel: "Feb 20" },
-          { startTime: "2026-02-21T00:00:00Z", value: 1, windowLabel: "Feb 21" },
+          { startTime: "2026-02-21T00:00:00Z", value: 0, windowLabel: "Feb 21" },
+          { startTime: "2026-02-22T00:00:00Z", value: 1, windowLabel: "Feb 22" },
+        ],
+      },
+      {
+        tags: { stage: "drg-assignment" },
+        points: [
+          { startTime: "2026-02-18T00:00:00Z", value: 0, windowLabel: "Feb 18" },
+          { startTime: "2026-02-19T00:00:00Z", value: 0, windowLabel: "Feb 19" },
+          { startTime: "2026-02-20T00:00:00Z", value: 0, windowLabel: "Feb 20" },
+          { startTime: "2026-02-21T00:00:00Z", value: 0, windowLabel: "Feb 21" },
           { startTime: "2026-02-22T00:00:00Z", value: 0, windowLabel: "Feb 22" },
+          { startTime: "2026-02-23T00:00:00Z", value: 1, windowLabel: "Feb 23" },
         ],
       },
     ],
@@ -221,7 +317,6 @@ const mockMetricResults: KognitosMetricResult[] = [
 
 // ── API Functions ──────────────────────────────────────────────
 
-/** Simulates GET /api/v1/.../runs/{run_id} */
 export async function getRun(runId: string): Promise<KognitosRun | null> {
   await Promise.resolve();
   const run = mockRuns.find(
@@ -231,7 +326,6 @@ export async function getRun(runId: string): Promise<KognitosRun | null> {
   return run ?? null;
 }
 
-/** Simulates GET /api/v1/.../runs */
 export async function listRuns(options?: {
   pageSize?: number;
   filter?: string;
@@ -251,7 +345,6 @@ export async function listRuns(options?: {
   return { runs, nextPageToken };
 }
 
-/** Simulates GET /api/v1/.../runs/{run_id}/events */
 export async function getRunEvents(
   runId: string,
   options?: { pageSize?: number; filter?: string }
@@ -273,13 +366,11 @@ export async function getRunEvents(
   return { runEvents, nextPageToken };
 }
 
-/** Simulates GET /api/v1/.../dashboards:queryInsights */
 export async function queryInsights(): Promise<KognitosInsights> {
   await Promise.resolve();
   return mockInsights;
 }
 
-/** Simulates GET /api/v1/.../metrics:query */
 export async function queryMetrics(options?: {
   metrics?: string[];
   groupBy?: string[];
@@ -298,7 +389,6 @@ export async function queryMetrics(options?: {
   return { results };
 }
 
-/** Simulates GET /api/v1/.../workspaces:automationRunAggregates */
 export async function getAutomationRunAggregates(): Promise<{
   automationRunAggregates: {
     automationId: string;
@@ -309,15 +399,18 @@ export async function getAutomationRunAggregates(): Promise<{
   const total = mockRuns.length;
   const completed = mockRuns.filter((r) => r.state.completed).length;
 
-  // CUSTOMIZE: Map your SOP stage names to automation IDs here.
   return {
     automationRunAggregates: [
       {
-        automationId: "review-request",
-        stats: { totalRuns: total, completedRuns: completed },
+        automationId: "auto-code-clinical-notes",
+        stats: { totalRuns: 3, completedRuns: 2 },
       },
       {
-        automationId: "escalate-request",
+        automationId: "validate-code-bundling",
+        stats: { totalRuns: 1, completedRuns: 1 },
+      },
+      {
+        automationId: "drg-assignment",
         stats: { totalRuns: 1, completedRuns: 1 },
       },
     ],

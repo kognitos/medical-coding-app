@@ -9,6 +9,7 @@ import {
   Bell,
   Settings,
   Layers,
+  Stethoscope,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
@@ -38,6 +39,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Bell,
   Settings,
   Layers,
+  Stethoscope,
 };
 
 const LogoIcon = ICON_MAP[DOMAIN.appLogo] ?? Layers;

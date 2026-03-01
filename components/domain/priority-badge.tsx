@@ -8,7 +8,7 @@ export function PriorityBadge({ priority }: { priority: string }) {
   const config = DOMAIN.priorities.find((p) => p.value === priority);
   const label = config?.label ?? priority;
 
-  if (priority === "urgent") {
+  if (priority === "stat") {
     return (
       <Badge variant="destructive" className="gap-1">
         <Zap className="size-3 fill-current" />

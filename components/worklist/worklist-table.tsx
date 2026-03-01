@@ -15,7 +15,7 @@ import {
 import { formatDistanceToNowStrict } from "date-fns";
 import { ArrowUpDown, ChevronDown, ChevronUp } from "lucide-react";
 
-import type { Request, User } from "@/lib/types";
+import type { Chart, User } from "@/lib/types";
 import { DOMAIN } from "@/lib/domain.config";
 import { listUsers } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -46,13 +46,14 @@ const currencyFmt = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-function daysOpen(createdAt: string): number {
+function daysSinceDischarge(chart: Chart): number {
+  const ref = chart.discharge_date ?? chart.encounter_date;
   return Math.floor(
-    (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24)
+    (Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60 * 24)
   );
 }
 
-function buildColumns(usersMap: Map<string, User>): ColumnDef<Request>[] {
+function buildColumns(usersMap: Map<string, User>): ColumnDef<Chart>[] {
   return [
     {
       id: "select",
@@ -78,16 +79,29 @@ function buildColumns(usersMap: Map<string, User>): ColumnDef<Request>[] {
       size: 40,
     },
     {
+      accessorKey: "patient_mrn",
+      header: "MRN",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs">{row.getValue("patient_mrn")}</span>
+      ),
+      enableSorting: true,
+    },
+    {
       accessorKey: "title",
-      header: "Title",
+      header: "Patient / Visit",
       cell: ({ row }) => (
         <span className="font-medium">{row.getValue("title")}</span>
       ),
       enableSorting: true,
     },
     {
-      accessorKey: "category",
-      header: "Category",
+      accessorKey: "provider_name",
+      header: "Provider",
+      enableSorting: true,
+    },
+    {
+      accessorKey: "department",
+      header: "Department",
       enableSorting: true,
     },
     {
@@ -103,34 +117,24 @@ function buildColumns(usersMap: Map<string, User>): ColumnDef<Request>[] {
       enableSorting: false,
     },
     {
-      id: "assigned_to",
-      header: "Assigned To",
-      accessorFn: (row) =>
-        usersMap.get(row.assigned_to ?? "")?.full_name ?? "Unassigned",
-      cell: ({ getValue }) => (
-        <span className="text-sm">{getValue() as string}</span>
-      ),
-      enableSorting: false,
-    },
-    {
-      accessorKey: "estimated_value",
-      header: "Est. Value",
+      accessorKey: "estimated_reimbursement",
+      header: "Est. Reimb.",
       cell: ({ row }) => (
         <span className="tabular-nums font-medium">
-          {currencyFmt.format(row.original.estimated_value)}
+          {currencyFmt.format(row.original.estimated_reimbursement)}
         </span>
       ),
       enableSorting: true,
     },
     {
-      id: "days_open",
+      id: "age",
       header: "Age",
-      accessorFn: (row) => daysOpen(row.created_at),
+      accessorFn: (row) => daysSinceDischarge(row),
       cell: ({ row }) => {
-        const created = row.original.created_at;
+        const ref = row.original.discharge_date ?? row.original.encounter_date;
         return (
           <span className="text-muted-foreground tabular-nums">
-            {formatDistanceToNowStrict(new Date(created), { addSuffix: false })}
+            {formatDistanceToNowStrict(new Date(ref), { addSuffix: false })}
           </span>
         );
       },
@@ -145,7 +149,7 @@ function SortIcon({ isSorted }: { isSorted: false | "asc" | "desc" }) {
   return <ArrowUpDown className="size-3.5 opacity-40" />;
 }
 
-export function WorklistTable({ items }: { items: Request[] }) {
+export function WorklistTable({ items }: { items: Chart[] }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [usersMap, setUsersMap] = useState<Map<string, User>>(new Map());

@@ -1,16 +1,14 @@
 /**
  * Barrel re-export for the API layer.
- *
- * CUSTOMIZE: Add or remove module re-exports as you add new entity APIs.
  */
 
 export {
-  listRequests,
-  getRequestById,
-  getDocumentsForRequest,
-  getCommentsForRequest,
-  getAuditEventsForRequest,
-} from "./requests";
+  listCharts,
+  getChartById,
+  getDocumentsForChart,
+  getCommentsForChart,
+  getAuditEventsForChart,
+} from "./charts";
 
 export {
   listUsers,

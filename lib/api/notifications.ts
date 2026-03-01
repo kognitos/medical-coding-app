@@ -1,7 +1,5 @@
 /**
  * API functions for Notifications.
- *
- * CUSTOMIZE: Add mark-as-read, delete, or channel-specific helpers.
  */
 
 import type { Notification } from "@/lib/types";

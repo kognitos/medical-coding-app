@@ -1,38 +1,46 @@
 /**
- * Domain types for the workflow template app.
- *
- * Example domain: "Approval Requests" — submit, review, approve/reject.
- *
- * Look for CUSTOMIZE comments to adapt these types to your own domain.
+ * Domain types for the Medical Coding (CPT/ICD-10) application.
  */
 
 // ── Status & Enum Types ────────────────────────────────────────
 
-/** CUSTOMIZE: Define the lifecycle statuses for your core entity. */
-export type RequestStatus =
-  | "draft"
-  | "submitted"
-  | "under_review"
-  | "approved"
-  | "rejected"
-  | "closed";
+export type ChartStatus =
+  | "pending_coding"
+  | "auto_coded"
+  | "in_review"
+  | "query_sent"
+  | "coded"
+  | "audited"
+  | "finalized";
 
-/** CUSTOMIZE: Define the roles users can have in your workflow. */
-export type UserRole = "requester" | "reviewer" | "manager" | "admin";
+export type UserRole = "coder" | "auditor" | "coding_manager" | "admin";
 
-/** CUSTOMIZE: Add or change priority levels as needed. */
-export type Priority = "urgent" | "standard";
+export type Priority = "stat" | "routine";
+
+// ── Code Types ─────────────────────────────────────────────────
+
+export interface SuggestedCode {
+  code: string;
+  type: "CPT" | "ICD-10";
+  description: string;
+  confidence: number;
+}
+
+export interface FinalCode {
+  code: string;
+  type: "CPT" | "ICD-10";
+  description: string;
+  source: "auto" | "manual";
+}
 
 // ── Core Domain Models ─────────────────────────────────────────
 
-/** CUSTOMIZE: Organization fields for multi-tenancy. */
 export interface Organization {
   id: string;
   name: string;
   slug: string;
 }
 
-/** CUSTOMIZE: Add or remove fields to match your user model. */
 export interface User {
   id: string;
   org_id: string;
@@ -44,36 +52,39 @@ export interface User {
 }
 
 /**
- * The core workflow entity.
- * CUSTOMIZE: Rename this interface and adjust fields for your domain
- * (e.g. "Ticket", "Order", "Claim").
+ * The core workflow entity — a clinical chart requiring CPT/ICD-10 coding.
  */
-export interface Request {
+export interface Chart {
   id: string;
   org_id: string;
   title: string;
   description: string;
-  requester_id: string;
+  patient_mrn: string;
+  encounter_number: string;
+  encounter_date: string;
+  discharge_date: string | null;
+  provider_name: string;
+  department: string;
   assigned_to: string | null;
-  status: RequestStatus;
+  status: ChartStatus;
   priority: Priority;
-  /** CUSTOMIZE: Replace with your own category taxonomy. */
   category: string;
-  /** CUSTOMIZE: Numeric value relevant to your domain (cost, estimate, etc.). */
-  estimated_value: number;
-  submitted_at: string | null;
-  decided_at: string | null;
-  closed_at: string | null;
+  suggested_codes: SuggestedCode[];
+  final_codes: FinalCode[];
+  drg: string | null;
+  estimated_reimbursement: number;
+  coding_accuracy_score: number | null;
+  coded_at: string | null;
+  finalized_at: string | null;
   created_at: string;
   updated_at: string;
   kognitos_run_id: string;
   episode_id: string | null;
 }
 
-/** CUSTOMIZE: Adjust document metadata fields for your domain. */
 export interface Document {
   id: string;
-  request_id: string;
+  chart_id: string;
   file_name: string;
   document_type: string;
   size_bytes: number;
@@ -81,53 +92,44 @@ export interface Document {
   created_at: string;
 }
 
-/** CUSTOMIZE: Add fields like visibility, edited_at, etc. */
 export interface Comment {
   id: string;
-  request_id: string;
+  chart_id: string;
   author_id: string;
   content: string;
   created_at: string;
 }
 
-/** CUSTOMIZE: Expand the details payload to suit your audit needs. */
 export interface AuditEvent {
   id: string;
-  request_id: string;
+  chart_id: string;
   action: string;
   actor_id: string | null;
   details: Record<string, unknown>;
   created_at: string;
 }
 
-/** CUSTOMIZE: Add channels (email, push) or priority to notifications. */
 export interface Notification {
   id: string;
   user_id: string;
-  request_id: string | null;
+  chart_id: string | null;
   message: string;
   is_read: boolean;
   created_at: string;
 }
 
-/**
- * A business rule that can be evaluated against requests.
- * CUSTOMIZE: Adjust fields to match your rules engine.
- */
 export interface Rule {
   id: string;
   name: string;
   description: string;
   category: string;
   is_active: boolean;
-  /** CUSTOMIZE: Structured criteria expression (JSON, DSL, etc.). */
   criteria: string;
   created_at: string;
   updated_at: string;
 }
 
 // ── Kognitos Integration Types ─────────────────────────────────
-// These stay the same across domains — they map to the Kognitos API.
 
 export interface KognitosRun {
   name: string;
@@ -194,45 +196,41 @@ export interface KognitosMetricResult {
 
 // ── Mock Users ─────────────────────────────────────────────────
 
-/**
- * CUSTOMIZE: Update these mock users to match your own roles and org.
- * Used for local development and demo mode when Supabase is not configured.
- */
 export const MOCK_USERS: Record<UserRole, User> = {
-  requester: {
+  coder: {
     id: "usr_001",
     org_id: "org_001",
-    full_name: "Alice Johnson",
-    email: "alice.johnson@example.com",
-    role: "requester",
+    full_name: "Sarah Chen",
+    email: "sarah.chen@mercy-health.org",
+    role: "coder",
     avatar_url: "",
-    created_at: "2025-01-15T08:00:00Z",
+    created_at: "2025-06-01T08:00:00Z",
   },
-  reviewer: {
+  auditor: {
     id: "usr_002",
     org_id: "org_001",
-    full_name: "Bob Martinez",
-    email: "bob.martinez@example.com",
-    role: "reviewer",
+    full_name: "James Rivera",
+    email: "james.rivera@mercy-health.org",
+    role: "auditor",
     avatar_url: "",
-    created_at: "2025-01-15T08:00:00Z",
+    created_at: "2025-06-01T08:00:00Z",
   },
-  manager: {
+  coding_manager: {
     id: "usr_003",
     org_id: "org_001",
-    full_name: "Carol Williams",
-    email: "carol.williams@example.com",
-    role: "manager",
+    full_name: "Patricia Walsh",
+    email: "patricia.walsh@mercy-health.org",
+    role: "coding_manager",
     avatar_url: "",
-    created_at: "2025-01-15T08:00:00Z",
+    created_at: "2025-06-01T08:00:00Z",
   },
   admin: {
     id: "usr_004",
     org_id: "org_001",
-    full_name: "David Chen",
-    email: "david.chen@example.com",
+    full_name: "Michael Torres",
+    email: "michael.torres@mercy-health.org",
     role: "admin",
     avatar_url: "",
-    created_at: "2025-01-15T08:00:00Z",
+    created_at: "2025-06-01T08:00:00Z",
   },
 };

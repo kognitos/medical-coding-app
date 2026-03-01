@@ -3,9 +3,9 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 
 export const metadata: Metadata = {
-  title: "PriorAuth - Prior Authorization Management",
+  title: "MedCode - Autonomous Medical Coding Platform",
   description:
-    "Streamline prior authorization workflows with intelligent automation",
+    "Autonomous medical coding with CPT/ICD-10 code generation, validation, and compliance",
 };
 
 export default function RootLayout({

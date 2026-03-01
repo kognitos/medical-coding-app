@@ -133,9 +133,9 @@ function NotificationList({
                   })}
                 </span>
               </div>
-              {n.request_id && (
+              {n.chart_id && (
                 <Link
-                  href={`/${DOMAIN.entitySlug}/${n.request_id}`}
+                  href={`/${DOMAIN.entitySlug}/${n.chart_id}`}
                   className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
                   onClick={(e) => e.stopPropagation()}
                 >

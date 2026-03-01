@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Clock,
-  CheckCircle,
-  XCircle,
+  FileCheck,
+  AlertTriangle,
   ClipboardList,
   Zap,
   DollarSign,
@@ -34,7 +34,6 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/domain/status-badge";
-import { Badge } from "@/components/ui/badge";
 import {
   PieChart,
   Pie,
@@ -48,51 +47,42 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-import { DOMAIN } from "@/lib/domain.config";
-import { listRequests, queryInsights, queryMetrics } from "@/lib/api";
+import { DOMAIN, getStatusConfig } from "@/lib/domain.config";
+import { listCharts, queryInsights, queryMetrics } from "@/lib/api";
 import {
-  queryAvgTimeToDecision,
-  queryApprovalRate,
-  queryRejectionRate,
+  queryDNFCCount,
+  queryCodingAccuracyRate,
+  queryAvgTimeToCode,
+  queryRevenueAtRisk,
   queryStatusBreakdown,
   queryCategoryBreakdown,
 } from "@/lib/queries";
 import type {
-  Request,
+  Chart,
   KognitosInsights,
   KognitosMetricResult,
 } from "@/lib/types";
 
 // ── Colors ──────────────────────────────────────────────────────
 
-const COLORS = {
-  brand: "oklch(0.858 0.164 114.307)",
-  success: "oklch(0.635 0.185 147.775)",
-  destructive: "oklch(0.577 0.245 27.325)",
-  warning: "oklch(0.769 0.165 70.08)",
-  informative: "oklch(0.615 0.133 261.34)",
-  gray: "oklch(0.556 0 0)",
-};
-
-/* CUSTOMIZE: Map your statuses to chart colors. */
 const STATUS_COLORS: Record<string, string> = {
-  draft: COLORS.gray,
-  submitted: COLORS.informative,
-  under_review: COLORS.warning,
-  approved: COLORS.success,
-  rejected: COLORS.destructive,
-  closed: COLORS.gray,
+  pending_coding: "oklch(0.556 0 0)",
+  auto_coded: "oklch(0.615 0.133 261.34)",
+  in_review: "oklch(0.769 0.165 70.08)",
+  query_sent: "oklch(0.776 0.003 264.539)",
+  coded: "oklch(0.635 0.185 147.775)",
+  audited: "oklch(0.741 0.199 147.068)",
+  finalized: "oklch(0.858 0.164 114.307)",
 };
 
 const CATEGORY_COLORS = [
-  COLORS.brand,
-  COLORS.informative,
-  COLORS.warning,
-  COLORS.success,
-  COLORS.destructive,
-  "oklch(0.733 0.158 302.329)",
+  "oklch(0.858 0.164 114.307)",
+  "oklch(0.615 0.133 261.34)",
+  "oklch(0.769 0.165 70.08)",
+  "oklch(0.635 0.185 147.775)",
   "oklch(0.741 0.199 147.068)",
-  "oklch(0.759 0.113 210.52)",
+  "oklch(0.776 0.003 264.539)",
+  "oklch(0.556 0 0)",
 ];
 
 const currencyFmt = new Intl.NumberFormat("en-US", {
@@ -148,7 +138,7 @@ function KpiCard({
 
 // ── Drill-Down Table ────────────────────────────────────────────
 
-function DrillDownTable({ items }: { items: Request[] }) {
+function DrillDownTable({ items }: { items: Chart[] }) {
   return (
     <div className="flex-1 overflow-auto">
       <Table>
@@ -156,9 +146,9 @@ function DrillDownTable({ items }: { items: Request[] }) {
           <TableRow>
             <TableHead>ID</TableHead>
             <TableHead>Title</TableHead>
-            <TableHead>Category</TableHead>
+            <TableHead>Department</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="text-right">Est. Value</TableHead>
+            <TableHead className="text-right">Est. Reimb.</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -172,25 +162,25 @@ function DrillDownTable({ items }: { items: Request[] }) {
               </TableCell>
             </TableRow>
           )}
-          {items.map((r) => (
-            <TableRow key={r.id}>
+          {items.map((c) => (
+            <TableRow key={c.id}>
               <TableCell>
                 <Link
-                  href={`/${DOMAIN.entitySlug}/${r.id}`}
+                  href={`/${DOMAIN.entitySlug}/${c.id}`}
                   className="font-medium text-primary hover:underline"
                 >
-                  {r.id}
+                  {c.id}
                 </Link>
               </TableCell>
               <TableCell className="max-w-[180px] truncate">
-                {r.title}
+                {c.title}
               </TableCell>
-              <TableCell>{r.category}</TableCell>
+              <TableCell>{c.department}</TableCell>
               <TableCell>
-                <StatusBadge status={r.status} />
+                <StatusBadge status={c.status} />
               </TableCell>
               <TableCell className="text-right">
-                {currencyFmt.format(r.estimated_value)}
+                {currencyFmt.format(c.estimated_reimbursement)}
               </TableCell>
             </TableRow>
           ))}
@@ -203,10 +193,11 @@ function DrillDownTable({ items }: { items: Request[] }) {
 // ── Dashboard Page ──────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const [requests, setRequests] = useState<Request[]>([]);
-  const [avgTime, setAvgTime] = useState(0);
-  const [approvalRate, setApprovalRate] = useState(0);
-  const [rejectionRate, setRejectionRate] = useState(0);
+  const [charts, setCharts] = useState<Chart[]>([]);
+  const [dnfcCount, setDnfccount] = useState(0);
+  const [codingAccuracy, setCodingAccuracy] = useState(0);
+  const [avgTimeToCode, setAvgTimeToCode] = useState(0);
+  const [revenueAtRisk, setRevenueAtRisk] = useState(0);
   const [statusData, setStatusData] = useState<
     { status: string; count: number }[]
   >([]);
@@ -217,34 +208,37 @@ export default function DashboardPage() {
   const [metrics, setMetrics] = useState<KognitosMetricResult[]>([]);
   const [drillDown, setDrillDown] = useState<{
     title: string;
-    items: Request[];
+    items: Chart[];
   } | null>(null);
 
   useEffect(() => {
     Promise.all([
-      listRequests(),
-      queryAvgTimeToDecision(),
-      queryApprovalRate(),
-      queryRejectionRate(),
+      listCharts(),
+      queryDNFCCount(),
+      queryCodingAccuracyRate(),
+      queryAvgTimeToCode(),
+      queryRevenueAtRisk(),
       queryStatusBreakdown(),
       queryCategoryBreakdown(),
       queryInsights(),
       queryMetrics(),
     ]).then(
       ([
-        reqs,
+        chs,
+        dnfc,
+        acc,
         avgT,
-        appRate,
-        rejRate,
+        rev,
         statusBk,
         catBk,
         ins,
         metricRes,
       ]) => {
-        setRequests(reqs);
-        setAvgTime(avgT);
-        setApprovalRate(appRate);
-        setRejectionRate(rejRate);
+        setCharts(chs);
+        setDnfccount(dnfc);
+        setCodingAccuracy(acc);
+        setAvgTimeToCode(avgT);
+        setRevenueAtRisk(rev);
         setStatusData(statusBk);
         setCategoryData(catBk);
         setInsights(ins);
@@ -253,19 +247,14 @@ export default function DashboardPage() {
     );
   }, []);
 
-  const totalMoneySaved = insights
-    ? parseFloat(insights.valueInsight.totalMoneySavedUsd)
-    : 0;
   const totalRuns = insights?.runInsight.totalRunsCount ?? 0;
 
   const statusChartData = useMemo(
     () =>
       statusData.map((d) => ({
-        name: d.status
-          .replace(/_/g, " ")
-          .replace(/\b\w/g, (c) => c.toUpperCase()),
+        name: getStatusConfig(d.status)?.label ?? d.status.replace(/_/g, " "),
         value: d.count,
-        fill: STATUS_COLORS[d.status] ?? COLORS.gray,
+        fill: STATUS_COLORS[d.status] ?? "oklch(0.556 0 0)",
         rawStatus: d.status,
       })),
     [statusData],
@@ -286,30 +275,35 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">
-          {DOMAIN.entity.plural} performance overview
+          Medical coding analytics and performance overview
         </p>
       </div>
 
-      {/* KPI Cards — CUSTOMIZE: Adjust KPIs for your domain. */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <KpiCard
-          label="Avg Time to Decision"
-          value={`${avgTime.toFixed(1)} days`}
+          label="DNFC Count"
+          value={dnfcCount.toString()}
+          icon={AlertTriangle}
+        />
+        <KpiCard
+          label="Coding Accuracy"
+          value={`${Math.round(codingAccuracy)}%`}
+          icon={FileCheck}
+        />
+        <KpiCard
+          label="Avg Time to Code"
+          value={`${avgTimeToCode.toFixed(1)} hrs`}
           icon={Clock}
         />
         <KpiCard
-          label="Approval Rate"
-          value={`${Math.round(approvalRate)}%`}
-          icon={CheckCircle}
-        />
-        <KpiCard
-          label="Rejection Rate"
-          value={`${Math.round(rejectionRate)}%`}
-          icon={XCircle}
+          label="Revenue at Risk"
+          value={currencyFmt.format(revenueAtRisk)}
+          icon={DollarSign}
         />
         <KpiCard
           label={`Total ${DOMAIN.entity.plural}`}
-          value={requests.length.toString()}
+          value={charts.length.toString()}
           icon={ClipboardList}
         />
         <KpiCard
@@ -317,16 +311,11 @@ export default function DashboardPage() {
           value={totalRuns.toString()}
           icon={Zap}
         />
-        <KpiCard
-          label="Money Saved"
-          value={currencyFmt.format(totalMoneySaved)}
-          icon={DollarSign}
-        />
       </div>
 
       {/* Charts 2-up */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Status PieChart */}
+        {/* Status PieChart (donut) */}
         <Card>
           <CardHeader>
             <CardTitle>{DOMAIN.entity.plural} by Status</CardTitle>
@@ -353,7 +342,7 @@ export default function DashboardPage() {
                     const status = data.rawStatus;
                     setDrillDown({
                       title: `${data.name} (${data.value})`,
-                      items: requests.filter((r) => r.status === status),
+                      items: charts.filter((c) => c.status === status),
                     });
                   }}
                 >
@@ -367,10 +356,10 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Category BarChart */}
+        {/* Department/Service Line BarChart (horizontal) */}
         <Card>
           <CardHeader>
-            <CardTitle>{DOMAIN.entity.plural} by Category</CardTitle>
+            <CardTitle>{DOMAIN.entity.plural} by Department</CardTitle>
             <p className="text-xs text-muted-foreground">
               Click a bar to see {DOMAIN.entity.plural.toLowerCase()}
             </p>
@@ -418,8 +407,8 @@ export default function DashboardPage() {
                     ).payload;
                     setDrillDown({
                       title: `${payload.name} (${payload.value})`,
-                      items: requests.filter(
-                        (r) => r.category === payload.name,
+                      items: charts.filter(
+                        (c) => (c.category || "Uncategorized") === payload.name,
                       ),
                     });
                   }}
@@ -434,7 +423,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* CUSTOMIZE: Kognitos Metrics Section */}
+      {/* Kognitos Automation Insights */}
       {insights && (
         <Card>
           <CardHeader>
@@ -478,7 +467,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Completions per period */}
             {insights.completionInsight.completionsPerPeriod.length > 0 && (
               <div className="mt-4">
                 <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
